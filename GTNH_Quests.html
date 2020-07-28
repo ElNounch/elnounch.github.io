@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui">
+  <title>GTNH quests dependencies</title>
+  <style>
+ 
+body {
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+	margin: 0px;
+}
+
+#graph {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -999;
+}
+
+  </style>
+<script src="https://cdn.jsdelivr.net/npm/d3@5.16.0/dist/d3.min.js" integrity="sha256-Xb6SSzhH3wEPC4Vy3W70Lqh9Y3Du/3KxPqI2JHQSpTw=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@0.3.14/dist/index.min.js" integrity="sha256-GQQPKRntjhRqIwXvSCfytweTuDgJQ7hnK3RGsln9HWc=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3.1.0/build/d3-graphviz.min.js" integrity="sha256-WRJh26uDo3BP+SjibjTwXI66JLkDFXmreIGpKm0xHV8=" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="graph" height="100%"></div>
+<select id="quest-select"></select>
+<button onclick="copyDOTtoClipboard()">💾</button>
+<script>
+"use strict";
+
+	var branchCurrent
+	var questCurrent
+	var quest, questLine
+	var questSelector = document.getElementById('quest-select')
+	var dotContent
+	var alreadyDrawn
+	var questlineUsedMembers
+
+	function copyDOTtoClipboard() {
+		navigator.clipboard.writeText(dotContent)
+	}
+
+	function cleanString(str) {
+		return str.replace(/§./g, '')
+	}
+
+	function updateURL(replace) {
+		var title = 'Dependencies of "' + ((quest !== undefined) && quest.hasOwnProperty(questCurrent) ? quest[questCurrent].name : '???') + '"'
+		if (replace) {
+			history.replaceState({
+				branch: branchCurrent,
+				questID: questCurrent,
+			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent);
+		} else {
+			history.pushState({
+				branch: branchCurrent,
+				questID: questCurrent,
+			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent);
+		}
+	}
+
+	function setCurrentQuest(questId) {
+		questCurrent = questId;
+		if ((quest !== undefined) && (Object.keys(quest).length != 0)) {
+			graphQuest()
+		}
+	}
+
+	function quote_string(str) {
+		return str.replace("\"", "\\\"")
+	}
+	function addContent(str) {
+		dotContent = dotContent + str;
+	}
+	function addContentNl(str) {
+		addContent(str + "\n");
+	}
+
+	function graphQuest() {
+		window.document.title = 'Dependencies of "' + quest[questCurrent].name + '"'
+		alreadyDrawn = new Set()
+		questlineUsedMembers = new Map()
+		dotContent = ""
+
+		addContentNl("digraph {")
+		addContentNl("\trankdir=BT")
+		addContentNl("\tnode [shape=none, margin=0]")
+		graphQuestRecurse(questCurrent, quest[questCurrent].questLine)
+		addContentNl("\tlabelloc = b")
+		addContentNl("\tfontcolor = blue")
+		for (var [questLineId, used] of questlineUsedMembers) {
+			var details = questLine[questLineId]
+			addContentNl("\tsubgraph cluster_" + questLineId + " {")
+			addContentNl("\t\tlabel=\"" + quote_string(details.name) + "\"")
+			for (var questId of used) {
+				addContentNl("\t\t" + questId)
+			}
+			addContentNl("\t}")
+		}
+		addContentNl("}")
+
+		d3.select("#graph").graphviz().renderDot(dotContent)
+	}
+	
+
+	function graphQuestRecurse(questId,initialQuestLine) {
+		var details = quest[questId]
+		var currentIsMain = questLine[details.questLine].isMain
+
+		if (!questlineUsedMembers.has(details.questLine)) {
+			questlineUsedMembers.set(details.questLine, new Set())
+		}
+		questlineUsedMembers.get(details.questLine).add(questId)
+		
+		if (!alreadyDrawn.has(questId)) {
+			alreadyDrawn.add(questId)
+			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\"]")
+			if (!currentIsMain || (details.questLine == initialQuestLine)) {
+				details.preRequirements.forEach( (prevQuest) => {
+					addContentNl("\t" + prevQuest + " -> " + questId)
+				})
+				details.preRequirements.forEach( (prevQuest) => {
+					graphQuestRecurse(prevQuest,initialQuestLine)
+				})
+			}
+		}
+	}
+
+	function ingestQuestsDef(def) {
+		if (def['format:8'] === "2.0.0") {
+			quest = {}
+			questLine = {}
+
+			for (const idx in def['questDatabase:9']) {
+				var details = def['questDatabase:9'][idx];
+				var questId = 'quest_' + details['questID:3']
+				
+				quest[questId] = {
+					name: cleanString(details['properties:10']['betterquesting:10']['name:8']),
+					isMain: details['properties:10']['betterquesting:10']['isMain:1'] === 1,
+					preRequirements: [],
+				}
+
+				var preRequisites =  details['preRequisites:11']
+				for (const idxPreRequisites in preRequisites) {
+					quest[questId].preRequirements.push('quest_' + preRequisites[idxPreRequisites])
+				}
+			}
+
+			for (const idx in def['questLines:9']) {
+				var detailsQuestLine = def['questLines:9'][idx];
+				var questLineId = 'questline_' + detailsQuestLine['lineID:3']
+				questLine[questLineId] = {
+					name: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']),
+					isMain: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']).startsWith('Tier '),
+				}
+				var node = document.createElement("OPTGROUP")
+				node.label = questLine[questLineId].name
+				for (const idxMember in detailsQuestLine['quests:9']) {
+					var questId = 'quest_' + detailsQuestLine['quests:9'][idxMember]['id:3']
+					quest[questId].questLine = questLineId;
+					node.appendChild(new Option (quest[questId].name, questId))
+				}
+				questSelector.appendChild(node)
+			}
+		} else {
+			console.log("Unhandled BetterQuest definitions format")
+		}
+		questSelector.value = questCurrent
+		updateURL(true)
+		graphQuest()
+	}
+
+	function setDefinitionVersion(ver) {
+		var httpRequest = new XMLHttpRequest();
+		httpRequest.responseType = 'json'
+		httpRequest.onreadystatechange = function() {
+		  if (httpRequest.readyState === XMLHttpRequest.DONE) {
+			if (httpRequest.status === 200) {
+			  ingestQuestsDef(httpRequest.response);
+			} else {
+				console.log("Error " + httpRequest.status + " while downloading quests definitions");
+			}
+		  }
+		};
+		httpRequest.open('GET', 'https://cdn.jsdelivr.net/gh/GTNewHorizons/GT-New-Horizons-Modpack@' + ver + '/config/betterquesting/DefaultQuests.json', true);
+		branchCurrent = ver
+		httpRequest.send();
+	}
+	
+	questSelector.addEventListener('change', (event) => {
+		setCurrentQuest(event.target.value)
+		updateURL()
+	});
+
+	function getParam(name) {
+		return unescape(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + escape(name).replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
+	}
+
+	var tmp = getParam('questID')
+	if (tmp === "") {
+		tmp = 'quest_0'
+	}
+	setCurrentQuest(tmp)
+	var tmp = getParam('branch')
+	if (tmp === "") {
+		tmp = 'master'
+	}
+	setDefinitionVersion(tmp)
+	updateURL(true)
+</script>
+</body>
+</html>
+
