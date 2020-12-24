@@ -135,7 +135,14 @@ body {
 	function ingestQuestsDef(def) {
 		if (def['format:8'] === "2.0.0") {
 			quest = {}
-			questLine = {}
+			questLine = {
+				'fallback': {
+					name: "Lost & Hidden quests",
+					isMain: true,
+				}
+			}
+			var nodeFallback = document.createElement("OPTGROUP")
+			nodeFallback.label = questLine['fallback'].name
 
 			for (const idx in def['questDatabase:9']) {
 				var details = def['questDatabase:9'][idx];
@@ -143,7 +150,7 @@ body {
 				
 				quest[questId] = {
 					name: cleanString(details['properties:10']['betterquesting:10']['name:8']),
-					isMain: details['properties:10']['betterquesting:10']['isMain:1'] === 1,
+					isMain: (('isMain:1' in details['properties:10']['betterquesting:10']) && (details['properties:10']['betterquesting:10']['isMain:1'] === 1)),
 					preRequirements: [],
 				}
 
@@ -169,6 +176,16 @@ body {
 				}
 				questSelector.appendChild(node)
 			}
+			
+			// Fallback questline
+			for (const questId in quest) {
+				if ( !('questLine' in quest[questId])) {
+					quest[questId].questLine = 'fallback'
+					nodeFallback.appendChild(new Option (quest[questId].name, questId))
+				}
+			}
+			questSelector.appendChild(nodeFallback)
+
 		} else {
 			console.log("Unhandled BetterQuest definitions format")
 		}
@@ -217,4 +234,3 @@ body {
 </script>
 </body>
 </html>
-
