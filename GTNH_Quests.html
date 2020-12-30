@@ -1,43 +1,55 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui">
-  <title>GTNH quests dependencies</title>
-  <style>
- 
-body {
-	height: 100%;
-	width: 100%;
-	overflow: hidden;
-	margin: 0px;
-}
+	<meta charset="utf-8">
+	<meta name="viewport" content="user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui">
+	<title>GTNH quests dependencies</title>
+	<style>
+		body {
+			height: 100%;
+			width: 100%;
+			overflow: hidden;
+			margin: 0px;
+		}
 
-#graph {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: -999;
-}
+		#selectorbar {
+			position: fixed;
+			bottom: 0;
+			right: 0;
+			border: 3px solid #73AD21;
+			width: 25cm;
+			z-index: 1;
+		}
 
-  </style>
-<script src="https://cdn.jsdelivr.net/npm/d3@5/dist/d3.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1/dist/index.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3/build/d3-graphviz.min.js" crossorigin="anonymous"></script>
+		#graph {
+			height: 100%;
+			width: 100%;
+			position: fixed;
+			top: 0;
+			right: 0;
+			z-index: -999;
+		}
+	</style>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+	<script src="https://cdn.jsdelivr.net/npm/d3@5/dist/d3.min.js" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1/dist/index.min.js" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3/build/d3-graphviz.min.js" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 </head>
 <body>
-<div id="graph" height="100%"></div>
+<div id="selectorbar">
 <select id="quest-select"></select>
 <button onclick="copyDOTtoClipboard()">&#x1f4cb;</button>
+</div>
+<div id="graph" height="100%"></div>
 <script>
 "use strict";
 
 	var branchCurrent
 	var questCurrent
-	var quest, questLine
-	var questSelector = document.getElementById('quest-select')
+	var quests
+	var questLines
+	var questSelector
 	var dotContent
 	var alreadyDrawn
 	var questlineUsedMembers
@@ -47,11 +59,12 @@ body {
 	}
 
 	function cleanString(str) {
-		return str.replace(/§./g, '')
+		return str.replace(/\xA7./g, '')
 	}
 
 	function updateURL(replace) {
-		var title = 'Dependencies of "' + ((quest !== undefined) && quest.hasOwnProperty(questCurrent) ? quest[questCurrent].name : '???') + '"'
+		var title = 'Dependencies of ' + (((quests !== undefined) && quests.hasOwnProperty(questCurrent)) ? ('"' + quests[questCurrent].name + '" (#' + quests[questCurrent].id + ')') : '???') + ((branchCurrent !== "master") ? (' on version ' + branchCurrent) : '')
+		window.document.title = title
 		if (replace) {
 			history.replaceState({
 				branch: branchCurrent,
@@ -63,17 +76,17 @@ body {
 				questID: questCurrent,
 			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent);
 		}
-	}
 
-	function setCurrentQuest(questId) {
-		questCurrent = questId;
-		if ((quest !== undefined) && (Object.keys(quest).length != 0)) {
+		if ((quests !== undefined) && (Object.keys(quests).length != 0)) {
 			graphQuest()
+		}
+		if (questSelector.getValue(true) !== [questCurrent]) {
+			questSelector.setChoiceByValue([questCurrent])
 		}
 	}
 
 	function quote_string(str) {
-		return str.replace("\"", "\\\"")
+		return str.replaceAll("\"", "\\\"").replaceAll("\'", "\\\'")
 	}
 	function addContent(str) {
 		dotContent = dotContent + str;
@@ -83,7 +96,6 @@ body {
 	}
 
 	function graphQuest() {
-		window.document.title = 'Dependencies of "' + quest[questCurrent].name + '"'
 		alreadyDrawn = new Set()
 		questlineUsedMembers = new Map()
 		dotContent = ""
@@ -91,11 +103,11 @@ body {
 		addContentNl("digraph {")
 		addContentNl("\trankdir=BT")
 		addContentNl("\tnode [shape=none, margin=0]")
-		graphQuestRecurse(questCurrent, quest[questCurrent].questLine)
+		graphQuestRecurse(questCurrent, quests[questCurrent].questLine)
 		addContentNl("\tlabelloc = b")
 		addContentNl("\tfontcolor = blue")
 		for (var [questLineId, used] of questlineUsedMembers) {
-			var details = questLine[questLineId]
+			var details = questLines[questLineId]
 			addContentNl("\tsubgraph cluster_" + questLineId + " {")
 			addContentNl("\t\tlabel=\"" + quote_string(details.name) + "\"")
 			for (var questId of used) {
@@ -110,8 +122,8 @@ body {
 	
 
 	function graphQuestRecurse(questId,initialQuestLine) {
-		var details = quest[questId]
-		var currentIsMain = questLine[details.questLine].isMain
+		var details = quests[questId]
+		var currentIsMain = questLines[details.questLine].isMain
 
 		if (!questlineUsedMembers.has(details.questLine)) {
 			questlineUsedMembers.set(details.questLine, new Set())
@@ -120,7 +132,7 @@ body {
 		
 		if (!alreadyDrawn.has(questId)) {
 			alreadyDrawn.add(questId)
-			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\"]")
+			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_string(cleanString(details.description)) + "\"]")
 			if (!currentIsMain || (details.questLine == initialQuestLine)) {
 				details.preRequirements.forEach( (prevQuest) => {
 					addContentNl("\t" + prevQuest + " -> " + questId)
@@ -134,103 +146,120 @@ body {
 
 	function ingestQuestsDef(def) {
 		if (def['format:8'] === "2.0.0") {
-			quest = {}
-			questLine = {
-				'fallback': {
-					name: "Lost & Hidden quests",
-					isMain: true,
-				}
-			}
-			var nodeFallback = document.createElement("OPTGROUP")
-			nodeFallback.label = questLine['fallback'].name
+			quests = {}
+			questLines = {}
+			var selector_questlist = {}
 
 			for (const idx in def['questDatabase:9']) {
 				var details = def['questDatabase:9'][idx];
 				var questId = 'quest_' + details['questID:3']
-				
-				quest[questId] = {
+
+				quests[questId] = {
+					id: details['questID:3'],
 					name: cleanString(details['properties:10']['betterquesting:10']['name:8']),
 					isMain: (('isMain:1' in details['properties:10']['betterquesting:10']) && (details['properties:10']['betterquesting:10']['isMain:1'] === 1)),
 					preRequirements: [],
+					description: ('desc:8' in details['properties:10']['betterquesting:10'] ? details['properties:10']['betterquesting:10']['desc:8'] : ""),
+					questLine: '<none>',
 				}
 
 				var preRequisites =  details['preRequisites:11']
 				for (const idxPreRequisites in preRequisites) {
-					quest[questId].preRequirements.push('quest_' + preRequisites[idxPreRequisites])
+					quests[questId].preRequirements.push('quest_' + preRequisites[idxPreRequisites])
 				}
 			}
 
 			for (const idx in def['questLines:9']) {
 				var detailsQuestLine = def['questLines:9'][idx];
 				var questLineId = 'questline_' + detailsQuestLine['lineID:3']
-				questLine[questLineId] = {
+				questLines[questLineId] = {
 					name: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']),
 					isMain: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']).startsWith('Tier '),
 				}
-				var node = document.createElement("OPTGROUP")
-				node.label = questLine[questLineId].name
+
+				selector_questlist[questLineId] = {
+					label: questLines[questLineId].name,
+					choices: [],
+				}
+
 				for (const idxMember in detailsQuestLine['quests:9']) {
 					var questId = 'quest_' + detailsQuestLine['quests:9'][idxMember]['id:3']
-					quest[questId].questLine = questLineId;
-					node.appendChild(new Option (quest[questId].name, questId))
+					quests[questId].questLine = questLineId;
+					selector_questlist[questLineId].choices.push({
+						id: detailsQuestLine['quests:9'][idxMember]['id:3'],
+						value: questId,
+						label: quests[questId].name,
+						customProperties: {
+							description: quests[questId].description,
+						},
+					})
 				}
-				questSelector.appendChild(node)
 			}
 			
 			// Fallback questline
-			for (const questId in quest) {
-				if ( !('questLine' in quest[questId])) {
-					quest[questId].questLine = 'fallback'
-					nodeFallback.appendChild(new Option (quest[questId].name, questId))
+			questLines['<none>'] = {
+				name: "Lost & Hidden quests",
+				isMain: true,
+			}
+			selector_questlist['<none>'] = {
+				label: questLines['<none>'].name,
+				choices: [],
+			}
+			for (const questId in quests) {
+				if (quests[questId].questLine == '<none>') {
+					selector_questlist['<none>'].choices.push({
+						value: questId,
+						label: quests[questId].name,
+						customProperties: {
+							description: quests[questId].description,
+						},
+					})
 				}
 			}
-			questSelector.appendChild(nodeFallback)
-
+			questSelector.setChoices(Object.values(selector_questlist), 'value', 'label', true)
+			updateURL(true);
 		} else {
 			console.log("Unhandled BetterQuest definitions format")
 		}
-		questSelector.value = questCurrent
-		updateURL(true)
-		graphQuest()
 	}
 
-	function setDefinitionVersion(ver) {
+	function loadDefinitionVersion(ver) {
 		var httpRequest = new XMLHttpRequest();
 		httpRequest.responseType = 'json'
 		httpRequest.onreadystatechange = function() {
 		  if (httpRequest.readyState === XMLHttpRequest.DONE) {
 			if (httpRequest.status === 200) {
-			  ingestQuestsDef(httpRequest.response);
+			  ingestQuestsDef(httpRequest.response)
 			} else {
 				console.log("Error " + httpRequest.status + " while downloading quests definitions");
 			}
 		  }
 		};
-		httpRequest.open('GET', 'https://cdn.jsdelivr.net/gh/GTNewHorizons/GT-New-Horizons-Modpack@' + ver + '/config/betterquesting/DefaultQuests.json', true);
-		branchCurrent = ver
-		httpRequest.send();
+		httpRequest.open('GET', 'https://cdn.jsdelivr.net/gh/GTNewHorizons/GT-New-Horizons-Modpack@' + ver + '/config/betterquesting/DefaultQuests.json', true)
+		httpRequest.send()
 	}
 	
-	questSelector.addEventListener('change', (event) => {
-		setCurrentQuest(event.target.value)
-		updateURL()
-	});
-
 	function getParam(name) {
 		return unescape(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + escape(name).replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
 	}
 
-	var tmp = getParam('questID')
-	if (tmp === "") {
-		tmp = 'quest_0'
-	}
-	setCurrentQuest(tmp)
-	var tmp = getParam('branch')
-	if (tmp === "") {
-		tmp = 'master'
-	}
-	setDefinitionVersion(tmp)
-	updateURL(true)
+    document.addEventListener('DOMContentLoaded', function() {
+		questSelector = new Choices('#quest-select', {
+			maxItemCount:	1,
+			shouldSort:		false,
+			searchFields:	['label', 'id', 'customProperties.description'],
+			placeholderValue: "???",
+			searchPlaceholderValue: "Select quest",
+		});
+		questSelector.passedElement.element.addEventListener('change', (event) => {
+			questCurrent = event.detail.value
+			updateURL()
+		});
+
+		branchCurrent = getParam('branch') || 'master'
+		questCurrent = getParam('questID') || 'quest_0'
+		loadDefinitionVersion(branchCurrent)
+	})
 </script>
 </body>
 </html>
