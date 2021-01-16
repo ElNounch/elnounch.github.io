@@ -88,6 +88,9 @@
 	function quote_string(str) {
 		return str.replaceAll("\"", "\\\"").replaceAll("\'", "\\\'")
 	}
+	function quote_newlines(str) {
+		return str.replaceAll("\n", "\\n")
+	}
 	function addContent(str) {
 		dotContent = dotContent + str;
 	}
@@ -132,7 +135,7 @@
 		
 		if (!alreadyDrawn.has(questId)) {
 			alreadyDrawn.add(questId)
-			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_string(cleanString(details.description)) + "\"]")
+			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_newlines(quote_string(cleanString(details.description))) + "\"]")
 			if (!currentIsMain || (details.questLine == initialQuestLine)) {
 				details.preRequirements.forEach( (prevQuest) => {
 					addContentNl("\t" + prevQuest + " -> " + questId)
@@ -149,6 +152,7 @@
 			quests = {}
 			questLines = {}
 			var selector_questlist = {}
+			var lostandfound_questline = 'LostAndFound';
 
 			for (const idx in def['questDatabase:9']) {
 				var details = def['questDatabase:9'][idx];
@@ -160,7 +164,7 @@
 					isMain: (('isMain:1' in details['properties:10']['betterquesting:10']) && (details['properties:10']['betterquesting:10']['isMain:1'] === 1)),
 					preRequirements: [],
 					description: ('desc:8' in details['properties:10']['betterquesting:10'] ? details['properties:10']['betterquesting:10']['desc:8'] : ""),
-					questLine: '<none>',
+					questLine: lostandfound_questline,
 				}
 
 				var preRequisites =  details['preRequisites:11']
@@ -197,17 +201,17 @@
 			}
 			
 			// Fallback questline
-			questLines['<none>'] = {
+			questLines[lostandfound_questline] = {
 				name: "Lost & Hidden quests",
 				isMain: true,
 			}
-			selector_questlist['<none>'] = {
-				label: questLines['<none>'].name,
+			selector_questlist[lostandfound_questline] = {
+				label: questLines[lostandfound_questline].name,
 				choices: [],
 			}
 			for (const questId in quests) {
-				if (quests[questId].questLine == '<none>') {
-					selector_questlist['<none>'].choices.push({
+				if (quests[questId].questLine == lostandfound_questline) {
+					selector_questlist[lostandfound_questline].choices.push({
 						value: questId,
 						label: quests[questId].name,
 						customProperties: {
