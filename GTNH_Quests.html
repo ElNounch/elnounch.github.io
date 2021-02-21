@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>GTNH quests dependencies</title>
 	<style>
 		body {
@@ -10,15 +10,78 @@
 			width: 100%;
 			overflow: hidden;
 			margin: 0px;
+			background-color: #f0f0f0;
+		}
+
+		#searchMenu {
+			display: flex;
+			flex-direction: row-reverse;
+
+			position: fixed;
+			top: 0;
+			right: 0;
+			z-index: 1;
+		}
+
+		#searchMenuStrings {
+			display: none;
+			flex-direction: column;
+			width: 25cm;
+			border: 3px solid #73AD21;
+		}
+		#searchMenuStrings.visible {
+			display: flex;
 		}
 
 		#selectorbar {
+			display: flex;
+			flex-direction: column;
+
 			position: fixed;
-			bottom: 0;
+			top: 0;
 			right: 0;
 			border: 3px solid #73AD21;
 			width: 25cm;
 			z-index: 1;
+		}
+
+		#questlistTable tr.questline {
+			background-color: #f0f0ff;
+			display: none;
+		}
+
+		#questlistTable tr.quest {
+			background-color: #f0fff0;
+			display: none;
+			position: relative;
+		}
+
+		#questlistTable tr.quest:hover {
+			cursor: pointer;
+		}
+
+		#questlistTable tr.questline.visible {
+			display: block;
+		}
+
+		#questlistTable tr.quest.visible {
+			display: block;
+		}
+
+		#searchBtn {
+			position: relative;
+			top: 0px;
+			left: 0px;
+			height: 32px;
+			width: 32px;
+		}
+
+		#copy2clipboard {
+			position: absolute;
+			bottom: 0px;
+			right: 0px;
+			height: 32px;
+			width: 32px;
 		}
 
 		#graph {
@@ -26,22 +89,37 @@
 			width: 100%;
 			position: fixed;
 			top: 0;
-			right: 0;
-			z-index: -999;
+			left: 0;
+			z-index: -100;
+		}
+
+		#visitorCounter {
+			position: absolute;
+			bottom: 0px;
+			right: 200px;
+			z-index: -110;
 		}
 	</style>
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
 	<script src="https://cdn.jsdelivr.net/npm/d3@5/dist/d3.min.js" crossorigin="anonymous"></script>
 	<script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1/dist/index.min.js" crossorigin="anonymous"></script>
 	<script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3/build/d3-graphviz.min.js" crossorigin="anonymous"></script>
-	<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/fuse.js@6/dist/fuse.min.js"></script>
 </head>
 <body>
-<div id="selectorbar">
-<select id="quest-select"></select>
-<button onclick="copyDOTtoClipboard()">&#x1f4cb;</button>
+<div id="searchMenu">
+<div id="searchMenuStrings">
+<div style="flex-direction: row;">
+<label for="query">Search</label>
+<input type="text" id="clues" name="query" placeholder="">
 </div>
+<table id="questlistTable">
+</table>
+</div>
+<button id="searchBtn" onclick="document.getElementById('searchMenuStrings').classList.toggle('visible')">&#x1f50d;</button>
+</div>
+<button id="copy2clipboard" onclick="copyDOTtoClipboard()">&#x1f4cb;</button>
 <div id="graph" height="100%"></div>
+<a href="https://www.hitwebcounter.com" target="_blank"><img id="visitorCounter" src="https://hitwebcounter.com/counter/counter.php?page=7755090&style=0007&nbdigits=5&type=ip&initCount=0" Alt="web counter"  border="0" /></a>
 <script>
 "use strict";
 
@@ -53,6 +131,9 @@
 	var dotContent
 	var alreadyDrawn
 	var questlineUsedMembers
+	var fuse;
+	const queryInput = document.querySelector('#clues');
+	const questListTable = document.querySelector('#questlistTable');
 
 	function copyDOTtoClipboard() {
 		navigator.clipboard.writeText(dotContent)
@@ -79,9 +160,6 @@
 
 		if ((quests !== undefined) && (Object.keys(quests).length != 0)) {
 			graphQuest()
-		}
-		if (questSelector.getValue(true) !== [questCurrent]) {
-			questSelector.setChoiceByValue([questCurrent])
 		}
 	}
 
@@ -151,7 +229,6 @@
 		if (def['format:8'] === "2.0.0") {
 			quests = {}
 			questLines = {}
-			var selector_questlist = {}
 			var lostandfound_questline = 'LostAndFound';
 
 			for (const idx in def['questDatabase:9']) {
@@ -180,23 +257,9 @@
 					name: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']),
 					isMain: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']).startsWith('Tier '),
 				}
-
-				selector_questlist[questLineId] = {
-					label: questLines[questLineId].name,
-					choices: [],
-				}
-
 				for (const idxMember in detailsQuestLine['quests:9']) {
 					var questId = 'quest_' + detailsQuestLine['quests:9'][idxMember]['id:3']
 					quests[questId].questLine = questLineId;
-					selector_questlist[questLineId].choices.push({
-						id: detailsQuestLine['quests:9'][idxMember]['id:3'],
-						value: questId,
-						label: quests[questId].name,
-						customProperties: {
-							description: quests[questId].description,
-						},
-					})
 				}
 			}
 			
@@ -205,22 +268,57 @@
 				name: "Lost & Hidden quests",
 				isMain: true,
 			}
-			selector_questlist[lostandfound_questline] = {
-				label: questLines[lostandfound_questline].name,
-				choices: [],
-			}
+			var previousByQuestline = {}
 			for (const questId in quests) {
-				if (quests[questId].questLine == lostandfound_questline) {
-					selector_questlist[lostandfound_questline].choices.push({
-						value: questId,
-						label: quests[questId].name,
-						customProperties: {
-							description: quests[questId].description,
-						},
-					})
+				const questLineId = quests[questId].questLine
+				quests[questId].nextByQuestline = previousByQuestline[questLineId]
+				previousByQuestline[questLineId] = quests[questId]
+			}
+			for (const idx in questLines) {
+				questLines[idx].firstByQuestline = previousByQuestline[idx]
+			}
+
+			fuse = new Fuse(Object.values(quests), {
+				// isCaseSensitive: false,
+				// includeScore: false,
+				includeScore: true,
+				// shouldSort: true,
+				// includeMatches: false,
+				// findAllMatches: false,
+				// minMatchCharLength: 1,
+				// location: 0,
+				// threshold: 0.6,
+				// distance: 100,
+				// useExtendedSearch: false,
+				// ignoreLocation: false,
+				ignoreLocation: true,
+				// ignoreFieldNorm: false,
+				keys: [
+					'name',
+					{ name: 'id', weight: 0.5 },
+					'description'
+				]
+			});
+
+			for (const idx in questLines) {
+				const line = questLines[idx]
+				const row = questListTable.insertRow(-1)
+				row.insertCell(-1).appendChild(document.createTextNode(line.name));
+				row.classList.add('questline')
+				row.id = idx
+				var quest = line.firstByQuestline
+				while (quest != null) {
+					var neo = document.createTextNode(quest.name)
+					const row = questListTable.insertRow(-1)
+					row.onclick = onQuestClick;
+					row.title = quest.description;
+					row.insertCell(-1).appendChild(neo);
+					row.classList.add('quest')
+					row.id = "quest_" + quest.id
+					quest = quest.nextByQuestline
 				}
 			}
-			questSelector.setChoices(Object.values(selector_questlist), 'value', 'label', true)
+			
 			updateURL(true);
 		} else {
 			console.log("Unhandled BetterQuest definitions format")
@@ -248,25 +346,28 @@
 	}
 
     document.addEventListener('DOMContentLoaded', function() {
-		questSelector = new Choices('#quest-select', {
-			maxItemCount:	1,
-			shouldSort:		false,
-			searchFields:	['label', 'id', 'customProperties.description'],
-			placeholderValue: "???",
-			searchPlaceholderValue: "Select quest",
-			fuseOptions: {
-				ignoreLocation: true,
-			},
-		});
-		questSelector.passedElement.element.addEventListener('change', (event) => {
-			questCurrent = event.detail.value
-			updateURL()
-		});
+		queryInput.addEventListener('input', () => {
+			const results = fuse.search(queryInput.value);
+			questlistTable.querySelectorAll('.visible').forEach(function(it){ it.classList.remove('visible') })
+			for (var i = 0; i < 20; ++i) {
+				document.getElementById(results[i].item.questLine).classList.add('visible')
+				document.getElementById("quest_" + results[i].item.id).classList.add('visible')
+			}
+		})
 
 		branchCurrent = getParam('branch') || 'master'
 		questCurrent = getParam('questID') || 'quest_0'
 		loadDefinitionVersion(branchCurrent)
 	})
+
+	function onQuestClick(event) {
+		event.preventDefault();
+		questCurrent = event.target.id
+		if (questCurrent == "") {
+			questCurrent = event.target.parentNode.id
+		}
+		updateURL()
+	}
 </script>
 </body>
 </html>
