@@ -254,6 +254,9 @@
 			searchFields:	['label', 'id', 'customProperties.description'],
 			placeholderValue: "???",
 			searchPlaceholderValue: "Select quest",
+			fuseOptions: {
+				ignoreLocation: true,
+			},
 		});
 		questSelector.passedElement.element.addEventListener('change', (event) => {
 			questCurrent = event.detail.value
