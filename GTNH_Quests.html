@@ -29,7 +29,7 @@
 			width: 25cm;
 			border: 3px solid #73AD21;
 		}
-		#searchMenuStrings.visible {
+		.visible > #searchMenuStrings {
 			display: flex;
 		}
 
@@ -45,13 +45,16 @@
 			z-index: 1;
 		}
 
+		#questlistTable {
+			background-color: #ffffff;
+		}
+
 		#questlistTable tr.questline {
 			background-color: #f0f0ff;
 			display: none;
 		}
 
 		#questlistTable tr.quest {
-			background-color: #f0fff0;
 			display: none;
 			position: relative;
 		}
@@ -74,6 +77,20 @@
 			left: 0px;
 			height: 32px;
 			width: 32px;
+			text-align: center;
+			z-index: 10;
+		}
+
+		:not(.visible) > #searchBtn {
+			animation: eyecalling 0.5s infinite alternate;
+		}
+		@keyframes eyecalling{
+			0%{
+		font-size: 90%;
+			}
+			100%{
+		font-size: 110%;
+			}
 		}
 
 		#copy2clipboard {
@@ -97,7 +114,6 @@
 			position: absolute;
 			bottom: 0px;
 			right: 200px;
-			z-index: -110;
 		}
 	</style>
 	<script src="https://cdn.jsdelivr.net/npm/d3@5/dist/d3.min.js" crossorigin="anonymous"></script>
@@ -110,12 +126,12 @@
 <div id="searchMenuStrings">
 <div style="flex-direction: row;">
 <label for="query">Search</label>
-<input type="text" id="clues" name="query" placeholder="">
+<input type="text" id="clues" name="query" placeholder="Search in quests name, description or number" size="100%">
 </div>
 <table id="questlistTable">
 </table>
 </div>
-<button id="searchBtn" onclick="document.getElementById('searchMenuStrings').classList.toggle('visible')">&#x1f50d;</button>
+<button id="searchBtn" onclick="document.getElementById('searchMenu').classList.toggle('visible')">&#x1f50d;</button>
 </div>
 <button id="copy2clipboard" onclick="copyDOTtoClipboard()">&#x1f4cb;</button>
 <div id="graph" height="100%"></div>
@@ -123,6 +139,7 @@
 <script>
 "use strict";
 
+	var baseURL
 	var branchCurrent
 	var questCurrent
 	var quests
@@ -200,7 +217,7 @@
 
 		d3.select("#graph").graphviz().renderDot(dotContent)
 	}
-	
+
 
 	function graphQuestRecurse(questId,initialQuestLine) {
 		var details = quests[questId]
@@ -210,10 +227,10 @@
 			questlineUsedMembers.set(details.questLine, new Set())
 		}
 		questlineUsedMembers.get(details.questLine).add(questId)
-		
+
 		if (!alreadyDrawn.has(questId)) {
 			alreadyDrawn.add(questId)
-			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_newlines(quote_string(cleanString(details.description))) + "\"]")
+			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_newlines(quote_string(cleanString(details.description))) + "\" URL=\"" + encodeURI(baseURL + "questID=") + "\\N\"]")
 			if (!currentIsMain || (details.questLine == initialQuestLine)) {
 				details.preRequirements.forEach( (prevQuest) => {
 					addContentNl("\t" + prevQuest + " -> " + questId)
@@ -262,7 +279,7 @@
 					quests[questId].questLine = questLineId;
 				}
 			}
-			
+
 			// Fallback questline
 			questLines[lostandfound_questline] = {
 				name: "Lost & Hidden quests",
@@ -318,7 +335,7 @@
 					quest = quest.nextByQuestline
 				}
 			}
-			
+
 			updateURL(true);
 		} else {
 			console.log("Unhandled BetterQuest definitions format")
@@ -340,7 +357,7 @@
 		httpRequest.open('GET', 'https://cdn.jsdelivr.net/gh/GTNewHorizons/GT-New-Horizons-Modpack@' + ver + '/config/betterquesting/DefaultQuests.json', true)
 		httpRequest.send()
 	}
-	
+
 	function getParam(name) {
 		return unescape(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + escape(name).replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
 	}
@@ -352,12 +369,25 @@
 			for (var i = 0; i < 20; ++i) {
 				document.getElementById(results[i].item.questLine).classList.add('visible')
 				document.getElementById("quest_" + results[i].item.id).classList.add('visible')
+				document.getElementById("quest_" + results[i].item.id).style.backgroundColor = 'rgba(140,255,140,' + (1 - results[i].score) + ')'
 			}
 		})
 
 		branchCurrent = getParam('branch') || 'master'
 		questCurrent = getParam('questID') || 'quest_0'
+
+		baseURL = window.location.href.split("?")[0]
+		if (getParam('branch')) {
+			baseURL += "?branch=" + branchCurrent + "&"
+		} else {
+			baseURL +=  "?"
+		}
+
 		loadDefinitionVersion(branchCurrent)
+		if (!getParam('questID')) {
+			document.querySelector('#searchMenu').classList.add('visible')
+			queryInput.focus()
+		}
 	})
 
 	function onQuestClick(event) {
