@@ -101,6 +101,14 @@
 			width: 32px;
 		}
 
+		#svg2download {
+			position: absolute;
+			bottom: 0px;
+			right: 32px;
+			height: 32px;
+			width: 32px;
+		}
+
 		#graph {
 			height: 100%;
 			width: 100%;
@@ -108,6 +116,7 @@
 			top: 0;
 			left: 0;
 			z-index: -100;
+			overflow: auto;
 		}
 
 		#visitorCounter {
@@ -116,10 +125,9 @@
 			right: 200px;
 		}
 	</style>
-	<script src="https://cdn.jsdelivr.net/npm/d3@5/dist/d3.min.js" crossorigin="anonymous"></script>
 	<script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1/dist/index.min.js" crossorigin="anonymous"></script>
-	<script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3/build/d3-graphviz.min.js" crossorigin="anonymous"></script>
 	<script src="https://cdn.jsdelivr.net/npm/fuse.js@6/dist/fuse.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/file-saver@2/dist/FileSaver.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 <div id="searchMenu">
@@ -134,12 +142,15 @@
 <button id="searchBtn" onclick="document.getElementById('searchMenu').classList.toggle('visible')">&#x1f50d;</button>
 </div>
 <button id="copy2clipboard" onclick="copyDOTtoClipboard()">&#x1f4cb;</button>
+<button id="svg2download" onclick="downloadSVG()">&#x1f4f7;</button>
 <div id="graph" height="100%"></div>
 <a href="https://www.hitwebcounter.com" target="_blank"><img id="visitorCounter" src="https://hitwebcounter.com/counter/counter.php?page=7755090&style=0007&nbdigits=5&type=ip&initCount=0" Alt="web counter"  border="0" /></a>
 <script>
 "use strict";
+	const hpccWasm = window["@hpcc-js/wasm"]
+//	const FileSaver = window["FileSaver"]
 
-	var baseURL
+	var nodeURL
 	var branchCurrent
 	var questCurrent
 	var quests
@@ -148,12 +159,18 @@
 	var dotContent
 	var alreadyDrawn
 	var questlineUsedMembers
-	var fuse;
+	var fuse
 	const queryInput = document.querySelector('#clues');
-	const questListTable = document.querySelector('#questlistTable');
+	const questListTable = document.querySelector('#questlistTable')
+	var svgContent
 
 	function copyDOTtoClipboard() {
 		navigator.clipboard.writeText(dotContent)
+	}
+
+	function downloadSVG() {
+		const blob = new Blob([svgContent], {type : 'image/svg+xml'})
+		saveAs(blob, "GTNH-Quest_" + quests[questCurrent].id + ".svg");
 	}
 
 	function cleanString(str) {
@@ -167,12 +184,12 @@
 			history.replaceState({
 				branch: branchCurrent,
 				questID: questCurrent,
-			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent);
+			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent)
 		} else {
 			history.pushState({
 				branch: branchCurrent,
 				questID: questCurrent,
-			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent);
+			}, title, '?branch=' + branchCurrent + '&questID=' + questCurrent)
 		}
 
 		if ((quests !== undefined) && (Object.keys(quests).length != 0)) {
@@ -187,10 +204,10 @@
 		return str.replaceAll("\n", "\\n")
 	}
 	function addContent(str) {
-		dotContent = dotContent + str;
+		dotContent = dotContent + str
 	}
 	function addContentNl(str) {
-		addContent(str + "\n");
+		addContent(str + "\n")
 	}
 
 	function graphQuest() {
@@ -200,7 +217,7 @@
 
 		addContentNl("digraph {")
 		addContentNl("\trankdir=BT")
-		addContentNl("\tnode [shape=none, margin=0]")
+		addContentNl("\tnode [shape=none margin=0 URL=\"" + encodeURI(nodeURL) + "\\N\"]")
 		graphQuestRecurse(questCurrent, quests[questCurrent].questLine)
 		addContentNl("\tlabelloc = b")
 		addContentNl("\tfontcolor = blue")
@@ -215,7 +232,10 @@
 		}
 		addContentNl("}")
 
-		d3.select("#graph").graphviz().renderDot(dotContent)
+        hpccWasm.graphviz.layout(dotContent, "svg", "dot").then(svg => {
+			svgContent = svg
+            document.getElementById("graph").innerHTML = svgContent
+        })
 	}
 
 
@@ -230,7 +250,7 @@
 
 		if (!alreadyDrawn.has(questId)) {
 			alreadyDrawn.add(questId)
-			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_newlines(quote_string(cleanString(details.description))) + "\" URL=\"" + encodeURI(baseURL + "questID=") + "\\N\"]")
+			addContentNl("\t" + questId + " [label=\"" + quote_string(details.name) + "\" tooltip=\"" + quote_newlines(quote_string(cleanString(details.description))) + "\"]")
 			if (!currentIsMain || (details.questLine == initialQuestLine)) {
 				details.preRequirements.forEach( (prevQuest) => {
 					addContentNl("\t" + prevQuest + " -> " + questId)
@@ -246,10 +266,10 @@
 		if (def['format:8'] === "2.0.0") {
 			quests = {}
 			questLines = {}
-			var lostandfound_questline = 'LostAndFound';
+			var lostandfound_questline = 'LostAndFound'
 
 			for (const idx in def['questDatabase:9']) {
-				var details = def['questDatabase:9'][idx];
+				var details = def['questDatabase:9'][idx]
 				var questId = 'quest_' + details['questID:3']
 
 				quests[questId] = {
@@ -268,7 +288,7 @@
 			}
 
 			for (const idx in def['questLines:9']) {
-				var detailsQuestLine = def['questLines:9'][idx];
+				var detailsQuestLine = def['questLines:9'][idx]
 				var questLineId = 'questline_' + detailsQuestLine['lineID:3']
 				questLines[questLineId] = {
 					name: cleanString(detailsQuestLine['properties:10']['betterquesting:10']['name:8']),
@@ -276,7 +296,7 @@
 				}
 				for (const idxMember in detailsQuestLine['quests:9']) {
 					var questId = 'quest_' + detailsQuestLine['quests:9'][idxMember]['id:3']
-					quests[questId].questLine = questLineId;
+					quests[questId].questLine = questLineId
 				}
 			}
 
@@ -315,56 +335,56 @@
 					{ name: 'id', weight: 0.5 },
 					'description'
 				]
-			});
+			})
 
 			for (const idx in questLines) {
 				const line = questLines[idx]
 				const row = questListTable.insertRow(-1)
-				row.insertCell(-1).appendChild(document.createTextNode(line.name));
+				row.insertCell(-1).appendChild(document.createTextNode(line.name))
 				row.classList.add('questline')
 				row.id = idx
 				var quest = line.firstByQuestline
 				while (quest != null) {
 					var neo = document.createTextNode(quest.name)
 					const row = questListTable.insertRow(-1)
-					row.onclick = onQuestClick;
-					row.title = quest.description;
-					row.insertCell(-1).appendChild(neo);
+					row.onclick = onQuestClick
+					row.title = quest.description
+					row.insertCell(-1).appendChild(neo)
 					row.classList.add('quest')
 					row.id = "quest_" + quest.id
 					quest = quest.nextByQuestline
 				}
 			}
 
-			updateURL(true);
+			updateURL(true)
 		} else {
 			console.log("Unhandled BetterQuest definitions format")
 		}
 	}
 
 	function loadDefinitionVersion(ver) {
-		var httpRequest = new XMLHttpRequest();
+		var httpRequest = new XMLHttpRequest()
 		httpRequest.responseType = 'json'
 		httpRequest.onreadystatechange = function() {
 		  if (httpRequest.readyState === XMLHttpRequest.DONE) {
 			if (httpRequest.status === 200) {
 			  ingestQuestsDef(httpRequest.response)
 			} else {
-				console.log("Error " + httpRequest.status + " while downloading quests definitions");
+				console.log("Error " + httpRequest.status + " while downloading quests definitions")
 			}
 		  }
-		};
+		}
 		httpRequest.open('GET', 'https://cdn.jsdelivr.net/gh/GTNewHorizons/GT-New-Horizons-Modpack@' + ver + '/config/betterquesting/DefaultQuests.json', true)
 		httpRequest.send()
 	}
 
 	function getParam(name) {
-		return unescape(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + escape(name).replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
+		return unescape(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + escape(name).replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"))
 	}
 
     document.addEventListener('DOMContentLoaded', function() {
 		queryInput.addEventListener('input', () => {
-			const results = fuse.search(queryInput.value);
+			const results = fuse.search(queryInput.value)
 			questlistTable.querySelectorAll('.visible').forEach(function(it){ it.classList.remove('visible') })
 			for (var i = 0; i < 20; ++i) {
 				document.getElementById(results[i].item.questLine).classList.add('visible')
@@ -376,11 +396,11 @@
 		branchCurrent = getParam('branch') || 'master'
 		questCurrent = getParam('questID') || 'quest_0'
 
-		baseURL = window.location.href.split("?")[0]
+		nodeURL = window.location.href.split("?")[0]
 		if (getParam('branch')) {
-			baseURL += "?branch=" + branchCurrent + "&"
+			nodeURL = "?branch=" + branchCurrent + "&questID="
 		} else {
-			baseURL +=  "?"
+			nodeURL =  "?questID="
 		}
 
 		loadDefinitionVersion(branchCurrent)
@@ -391,7 +411,7 @@
 	})
 
 	function onQuestClick(event) {
-		event.preventDefault();
+		event.preventDefault()
 		questCurrent = event.target.id
 		if (questCurrent == "") {
 			questCurrent = event.target.parentNode.id
